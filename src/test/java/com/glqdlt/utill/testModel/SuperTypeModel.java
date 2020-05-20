@@ -1,4 +1,4 @@
-package com.glqdlt.utill;
+package com.glqdlt.utill.testModel;
 
 public class SuperTypeModel {
 

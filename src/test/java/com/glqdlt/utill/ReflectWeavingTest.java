@@ -1,5 +1,6 @@
 package com.glqdlt.utill;
 
+import com.glqdlt.utill.testModel.*;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -39,6 +40,37 @@ public class ReflectWeavingTest {
         SubSubTypeModel zz = reflectWeaving.fromSuperDeepCopyToSub(superTypeModel, SubSubTypeModel.class);
         Assert.assertNotNull(zz);
         Assert.assertEquals(superTypeModel.getFirst(), zz.getFirst());
+    }
+
+    @Test
+    public void fromSuperDeepCopyToSubSkip() {
+        SuperSkipTestModel superSkipTestModel = new SubSkipTestModel();
+        superSkipTestModel.setFirst("first");
+        superSkipTestModel.setSecond("second");
+        superSkipTestModel.setSkip("skip");
+
+        ReflectWeaving reflectWeaving = new ReflectWeaving();
+        SubSkipTestModel sub = reflectWeaving.fromSuperDeepCopyToSub(superSkipTestModel, SubSkipTestModel.class);
+
+        Assert.assertEquals(superSkipTestModel.getFirst(), sub.getFirst());
+        Assert.assertEquals(superSkipTestModel.getSecond(), sub.getSecond());
+        Assert.assertNull(sub.getSkip());
+    }
+
+    @Test
+    public void notReleationClassDeepCopy() {
+        NotRelationClassA notRelationClassA = new NotRelationClassA();
+        notRelationClassA.setGetName("name");
+        notRelationClassA.setGetField("field");
+
+        ReflectWeaving reflectWeaving = new ReflectWeaving();
+        NotReleationClassB zzz = reflectWeaving.deepCopy(notRelationClassA, NotReleationClassB.class);
+        Assert.assertEquals(notRelationClassA.getGetName(), zzz.getGetName());
+        Assert.assertEquals(notRelationClassA.getGetField(), zzz.getGetField());
+    }
+
+    @Test
+    public void ignoreDeepCopyAtoB() {
 
     }
 }

@@ -1,5 +1,6 @@
 package com.glqdlt.utill;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.LinkedList;
 import java.util.List;
@@ -23,25 +24,6 @@ public class ReflectWeaving {
         }
     }
 
-
-    public Method findMethod(String methodName, List<Method> methods) {
-        for (Method m : methods) {
-            if (m.getName().equals(methodName)) {
-                return m;
-            }
-        }
-        throw new ReflectError(String.format("Not founded method name '%s", methodName));
-    }
-
-    private List<Method> filterMethod(String methodPrefix, Method[] target) {
-        List<Method> result = new LinkedList<Method>();
-        for (Method m : target) {
-            if (m.getName().startsWith(methodPrefix)) {
-                result.add(m);
-            }
-        }
-        return result;
-    }
 
     private class InvokeJob {
 
@@ -70,12 +52,19 @@ public class ReflectWeaving {
         }
     }
 
-    public List<InvokeJob> filtedSubMethod(List<Method> superMethods, Method[] subMethods) {
+    public List<InvokeJob> filtedMethod(List<Method> resourceMethod, Method[] targetMethods) {
 
         List<InvokeJob> result = new LinkedList<InvokeJob>();
 
-        for (Method sub_ : subMethods) {
-            for (Method super_ : superMethods) {
+        for (Method sub_ : targetMethods) {
+
+            boolean isSkip = isSkip(sub_.getAnnotations());
+
+            if (isSkip) {
+                continue;
+            }
+
+            for (Method super_ : resourceMethod) {
 
                 String setter = replaceSetterToGetter("set", super_.getName());
 
@@ -87,26 +76,53 @@ public class ReflectWeaving {
         return result;
     }
 
+    private boolean isSkip(Annotation[] _anno) {
+        boolean isSkip = false;
+        for (Annotation a : _anno) {
+            if (a instanceof WeavingIgnoreField) {
+                isSkip = true;
+            }
+        }
+        return isSkip;
+    }
+
     public <Sub, Super> Sub fromSuperDeepCopyToSub(Super targetSuperObject, Class<Sub> subType) {
+
+        if (!isThisSuperType(targetSuperObject.getClass(), subType)) {
+            throw new ReflectError(String.format("'%s' is not super type.", targetSuperObject.getClass().getName()));
+        }
+        return deepCopy(targetSuperObject, subType);
+
+    }
+
+    public <T, R> T deepCopy(R resource, Class<T> targetType) {
         try {
 
-            if (!isThisSuperType(targetSuperObject.getClass(), subType)) {
-                throw new ReflectError(String.format("'%s' is not super type.", targetSuperObject.getClass().getName()));
-            }
+            Method[] superMethods = resource.getClass().getMethods();
 
-            Method[] superMethods = targetSuperObject.getClass().getMethods();
-            final List<Method> invokeSuperMethods = this.filterMethod("get", superMethods);
-            Sub _sub = makeInstance(subType);
+            List<Method> findGetMethod = WeavingFilter.filter(superMethods, new AddOnFunction<Method>() {
+                public Boolean addOnCondition(Method method) {
+                    return method.getName().startsWith("get");
+                }
+            });
 
-            Method[] subMethods = subType.getMethods();
-            final List<InvokeJob> invokeSubMethods = this.filtedSubMethod(invokeSuperMethods, subMethods);
+            final List<Method> invokeGetMethods = WeavingFilter.filter(findGetMethod, new AddOnFunction<Method>() {
+                public Boolean addOnCondition(Method method) {
+                    return !isSkip(method.getAnnotations());
+                }
+            });
 
-            for (InvokeJob job : invokeSubMethods) {
+            T _t = makeInstance(targetType);
+
+            Method[] targetMethods = targetType.getMethods();
+            final List<InvokeJob> filtedTargetMethod = this.filtedMethod(invokeGetMethods, targetMethods);
+
+            for (InvokeJob job : filtedTargetMethod) {
                 Method invokeSetter = job.getSetter();
-                invokeSetter.invoke(_sub, job.getGetter().invoke(targetSuperObject));
+                invokeSetter.invoke(_t, job.getGetter().invoke(resource));
             }
 
-            return _sub;
+            return _t;
         } catch (Exception e) {
             throw new ReflectError(e);
         }
